@@ -240,6 +240,9 @@
 			if(!$this->r->oauth_token || !$this->r->oauth_token_secret){
 				return false;
 			}
+			
+			$this->token = new stdClass;
+			
 			$this->token->key = $this->r->oauth_token;
 			$this->token->secret = $this->r->oauth_token_secret;
 			return true;
