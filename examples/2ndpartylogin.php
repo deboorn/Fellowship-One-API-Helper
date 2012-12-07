@@ -27,6 +27,10 @@
 	function handleGetAccessToken($username){
 		//e.g. to get token from database by username
 		//must return object with properties "oauth_token" and "oauth_token_secret"
+		return (object) array(
+			'oauth_token'=>'oauth token here',
+			'oauth_token_secret'=>'oauth token secret here',
+		);
 	}
 	*/
 	
