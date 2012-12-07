@@ -441,7 +441,7 @@
 		 */
 		protected function redirectUserAuthorization($token,$callbackUrl){
 			try{
-				$_SESSION['requestToken'] = $token;
+				$_SESSION['F1RequestToken'] = $token;
 				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
 				$o->setToken($token->oauth_token, $this->oauth_token_secret);
 				$url = "{$this->settings->baseUrl}{$this->paths['portalUser']['userAuthorization']}?oauth_token={$token->oauth_token}&oauth_callback={$callbackUrl}";
@@ -458,10 +458,10 @@
 		 * @return object token
 		 */
 		protected function obtainUserAuthorationAccessToken(){
-			$requestToken = $_SESSION['requestToken'];
+			$requestToken = $_SESSION['F1RequestToken'];
 			
 			if($requestToken->oauth_token != $_GET['oauth_token']){
-				throw new Exception('Returned OAuth Token Doesn Not Match Request Token');
+				throw new Exception('Returned OAuth Token Does Not Match Request Token');
 			}
 			
 			try{

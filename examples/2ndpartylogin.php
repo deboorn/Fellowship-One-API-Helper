@@ -10,7 +10,7 @@
 	
 	#Example 1: login to F1 API via 2nd party with user credentials and save access token to session
 	$r = $f1->login2ndParty($username,$password);
-	//$r = $f1->login2ndParty($username,$password,FellowshipOne::TOKEN_CACHE_SESSION);//produces smae result
+	//$r = $f1->login2ndParty($username,$password,FellowshipOne::TOKEN_CACHE_SESSION);//produces same result
 	
 	
 	#Example 2: login to F1 API via 2nd party with user credentials and save access token to file based on username hash
