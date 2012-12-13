@@ -5,7 +5,7 @@
 	define("OAUTH_HTTP_METHOD_GET",'GET');
 
 	/**
-	 * OAuth<=>OAuthClient Adapter Class. Loaded by FellowshipOne when PHP PECL OAuth is not present.
+	 * OAuth<=>PECL-OAuth Adapter Class. Loaded by FellowshipOne when PHP PECL OAuth is not present. For use only with FellowshipOne Class.
 	 * @class OAuth
 	 * @license apache license 2.0, code is distributed "as is", use at own risk, all rights reserved
 	 * @copyright 2012 Daniel Boorn
