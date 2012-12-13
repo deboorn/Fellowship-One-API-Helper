@@ -4,8 +4,8 @@
 	 * Examples for 2nd Party Login with Credentials (to be used with ../index.php)
 	 */
 
-	$username = 'your username';
-	$password = 'your password';
+	$username = 'YOUR USERNAME';
+	$password = 'YOUR PASSWORD';
 	
 	
 	#Example 1: login to F1 API via 2nd party with user credentials and save access token to session

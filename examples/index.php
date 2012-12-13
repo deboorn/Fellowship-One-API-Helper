@@ -3,8 +3,9 @@
 
 	/*
 	 * FellowshipOne Helper Class Examples.
-	 * 
 	 */
+
+	//ini_set('display_errors','1');
 
 	session_start();
 	
@@ -13,14 +14,16 @@
 	var_dump($_SESSION);
 	die('clear session for debug');
 	*/
+
 	
 	require('../src/FellowshipOne.php');
 	
+	
 	//find key in F1 Portal under admin > integration > application keys
 	$settings = array(
-		'key'=>'your key',
-		'secret'=>'your secret',
-		'baseUrl'=>'https://yourchurchcode.staging.fellowshiponeapi.com',//notice the church code & staging plz!!
+		'key'=>'you api key',
+		'secret'=>'you api secret',
+		'baseUrl'=>'https://YOURCHURCHCODE.staging.fellowshiponeapi.com',//notice the church code & staging plz!!
 		'debug'=>false,
 	);
 	
@@ -30,11 +33,11 @@
 	
 	//Login Examples -- uncomment one at a time to test
 	//require('1stpartylogin.php');
-	//require('2ndpartylogin.php');
+	require('2ndpartylogin.php');
 	//require('3rdpartylogin.php');
 
 	//Resource Examples -- uncomment to test
-	//require('resources.php');
+	require('resources.php');
 	
 
 	

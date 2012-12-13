@@ -2,12 +2,12 @@
 
 	
 	/**
-	 * Helper Class for the FellowshipOne.com API
+	 * Helper Class for the FellowshipOne.com API.
 	 * @class FellowshipOne
 	 * @license apache license 2.0, code is distributed "as is", use at own risk, all rights reserved
 	 * @copyright 2012 Daniel Boorn
 	 * @author Daniel Boorn daniel.boorn@gmail.com
-	 * @requires PHP PECL OAuth, http://php.net/oauth
+	 * @requires (now optional) PHP PECL OAuth, http://php.net/oauth, packaged with OAuth Adapter when PHP PECL OAuth is not present.
 	 *
 	 */
 	class FellowshipOne{
@@ -57,9 +57,16 @@
 		 */
 		public function __construct($settings){
 			$this->settings = (object) $settings;
+			$this->checkOAuth();
 		}
 		
-		
+		protected function checkOAuth(){
+			if(!class_exists('OAuth')){
+				require('OAuthClient.php');
+				require('OAuth.php');
+			}
+		}
+				
 		/**
 		 * use __get magic method for easy property methods
 		 * @param string $property
@@ -239,7 +246,7 @@
 		 */
 		public function fetchGetJson($url,$params = NULL){
 			try{
-				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1, OAUTH_AUTH_TYPE_URI);
+				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
 				$o->setToken($this->accessToken->oauth_token, $this->accessToken->oauth_token_secret);
 				if($o->fetch($url,$params)){
 					return json_decode($o->getLastResponse(),true);
@@ -257,7 +264,7 @@
 		 */
 		public function fetchPostJson($url,$data = NULL){
 			try{
-				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1, OAUTH_AUTH_TYPE_URI);
+				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
 				$o->setToken($this->accessToken->oauth_token, $this->accessToken->oauth_token_secret);
 				$headers = array(
 					'Content-Type' => 'application/json',		
@@ -391,7 +398,6 @@
 				$token = $this->obtainCredentialsBasedAccessToken($username,$password);
 				$this->saveAccessToken($username,$token,$cacheType,$custoHandlers);
 			}
-			
 			
 			$this->accessToken = $token;
 			
