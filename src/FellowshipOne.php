@@ -47,6 +47,12 @@
 				'createPerson' => '/v1/People',
 				'newAddress' => '/v1/People/{personID}/Addresses/new',
 				'createAddress' => '/v1/People/{personID}/Addresses',
+				'attributeGroups' => '/v1/People/AttributeGroups',
+			),
+			'requirements' => array(
+				'requirementStatuses' => '/v1/requirements/requirementStatuses',
+				'backgroundCheckStatuses' => '/v1/requirements/backgroundCheckStatuses',	
+				'peopleRequirements' => '/v1/people/{personID}/requirements',
 			),
 		);
 		
@@ -91,6 +97,7 @@
 		/**
 		 * BEGIN: F1 API Resource Functions
 		 */
+		
 		
 		/**
 		 * fetch contribution receipt model from F1
@@ -149,6 +156,29 @@
 		}
 		
 		/**
+		 * get attribute groups for people
+		 */
+		public function getPeopleAttributeGroups(){
+			$url = $this->settings->baseUrl . $this->paths['people']['attributeGroups'] . ".json";
+			return $this->fetchGetJson($url);
+		}
+		
+		/**
+		 * get attribute by id
+		 */
+		public function getAttributeIdByName($name){
+			$r = $this->peopleAttributeGroups;
+			foreach($r['attributeGroups']['attributeGroup'] as $group){
+				foreach($group['attribute'] as $attribute){
+					if(strtolower($attribute['name']) == strtolower($name)){
+						return $attribute;
+					}
+				}
+			}
+			return null;
+		}
+		
+		/**
 		 * fetch household model from F1
 		 */
 		public function getHouseholdModel(){
@@ -193,6 +223,55 @@
 		public function getPeopleHouseholdMemberTypes(){
 			$url = $this->settings->baseUrl . $this->paths['people']['householdMemberTypes'] . ".json";
 			return $this->fetchGetJson($url);
+		}
+		
+		/**
+		 * fetch background check statuses
+		 */
+		public function getBackgroundCheckStatuses(){
+			$url = $this->settings->baseUrl . $this->paths['requirements']['backgroundCheckStatuses'] . ".json";
+			return $this->fetchGetJson($url);
+		}
+		
+		/**
+		 * fetch background check status by name
+		 */
+		public function getBackgroundCheckStatusByName($name){
+			$statuses = $this->backgroundCheckStatuses;
+			foreach($statuses['backgroundCheckStatuses']['backgroundCheckStatus'] as $status){
+				if(strtolower($status['name']) == strtolower($name)){
+					return $status;
+				}
+			}
+			return null;
+		}
+		
+		/**
+		 * fetch people requirements
+		 */
+		public function getPeopleRequirements($personId){
+			$url = $this->settings->baseUrl . str_replace("{personID}",$personId,$this->paths['requirements']['peopleRequirements'] . ".json");
+			return $this->fetchGetJson($url);
+		}
+		
+		/**
+		 * fetch requirement statuses
+		 */
+		public function getRequirementStatuses(){
+			$url = $this->settings->baseUrl . $this->paths['requirements']['requirementStatuses'] . ".json";
+			return $this->fetchGetJson($url);
+		}
+		
+		/**
+		 * fetches requirement status by name
+		 */
+		public function getRequirementStatusByName($name){
+			$statuses = $this->requirementStatuses;
+			foreach($statuses['requirementStatuses']['requirementStatus'] as $status){
+				if(strtolower($status['name'])==strtolower($name)){
+					return $status;
+				}
+			}
 		}
 	
 		/**
@@ -375,9 +454,9 @@
 					break;
 				case self::TOKEN_CACHE_CUSTOM:
 					if($username){
-						call_user_func($custoHandlers['getAccessToken'],$username,$token);
+						call_user_func($custoHandlers['setAccessToken'],$username,$token);
 					}else{
-						call_user_func($custoHandlers['getAccessToken'],$token);
+						call_user_func($custoHandlers['setAccessToken'],$token);
 					}
 			}
 		}
