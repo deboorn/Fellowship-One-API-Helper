@@ -48,6 +48,7 @@
 				'newAddress' => '/v1/People/{personID}/Addresses/new',
 				'createAddress' => '/v1/People/{personID}/Addresses',
 				'attributeGroups' => '/v1/People/AttributeGroups',
+				'attributes' => '/v1/People/{peopleID}/Attributes',
 			),
 			'requirements' => array(
 				'requirementStatuses' => '/v1/requirements/requirementStatuses',
@@ -156,7 +157,15 @@
 		}
 		
 		/**
-		 * get attribute groups for people
+		 * fetch attributes for a person 
+		 */
+		public function getPeopleAttributes($personId){
+			$url = $this->settings->baseUrl . str_replace("{peopleID}",$personId,$this->paths['people']['attributes'].".json");
+			return $this->fetchGetJson($url);
+		}
+		
+		/**
+		 * fetch attribute groups for people
 		 */
 		public function getPeopleAttributeGroups(){
 			$url = $this->settings->baseUrl . $this->paths['people']['attributeGroups'] . ".json";
