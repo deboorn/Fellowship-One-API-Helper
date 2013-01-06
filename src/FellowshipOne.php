@@ -7,7 +7,7 @@
 	 * @license apache license 2.0, code is distributed "as is", use at own risk, all rights reserved
 	 * @copyright 2012 Daniel Boorn
 	 * @author Daniel Boorn daniel.boorn@gmail.com
-	 * @requires (now optional) PHP PECL OAuth, http://php.net/oauth, packaged with OAuth Adapter when PHP PECL OAuth is not present.
+	 * @requires (now optional) PHP PECL OAuth, http://php.net/oauth, packaged with OAuth Adapter when PHP PECL OAuth is not present. PECL OAuth is STRONGLY Recommended for Modularity.
 	 *
 	 */
 	class FellowshipOne{
@@ -17,7 +17,6 @@
 		const TOKEN_CACHE_CUSTOM = 2;
 		
 		private $settings;
-		
 		
 		public $paths = array(
 			'tokenCache'=> 'tokens/',//file path to local folder
@@ -38,6 +37,7 @@
 				'createContributionReceipt'=>'/giving/v1/contributionreceipts',
 			),
 			'people' => array(
+				'contentType' => 'application/vnd.fellowshiponeapi.com.people.people.v2+json',
 				'newHousehold' => '/v1/Households/new',
 				'createHousehold' => '/v1/Households',
 				'householdMemberTypes' => '/v1/People/HouseholdMemberTypes',
@@ -45,6 +45,8 @@
 				'peopleSearch' => '/v1/People/Search',
 				'newPerson' => '/v1/People/new',
 				'createPerson' => '/v1/People',
+				'editPerson' => '/v1/People/{personID}/edit',
+				'updatePerson' =>'/v1/People/{personID}',
 				'newAddress' => '/v1/People/{personID}/Addresses/new',
 				'createAddress' => '/v1/People/{personID}/Addresses',
 				'attributeGroups' => '/v1/People/AttributeGroups',
@@ -99,13 +101,12 @@
 		 * BEGIN: F1 API Resource Functions
 		 */
 		
-		
 		/**
 		 * fetch contribution receipt model from F1
 		 */
 		public function getContributionReceiptModel(){
 			$url = $this->settings->baseUrl . $this->paths['giving']['newContributionReceipt'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -115,7 +116,7 @@
 		public function createContributionReceipt($model){
 			$url = $this->settings->baseUrl . $this->paths['giving']['createContributionReceipt'] . ".json";
 			$model = json_encode($model);
-			return $this->fetchPostJson($url,$model);
+			return $this->fetchJson($url,$model);
 		}
 		
 		/**
@@ -124,7 +125,7 @@
 		 */
 		public function getAddressModel($personId){
 			$url = str_replace('{personID}',$personId, $this->settings->baseUrl . $this->paths['people']['newAddress'] . ".json");
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -135,7 +136,7 @@
 		public function createAddress($model,$personId){
 			$url = str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['createAddress'] . ".json");
 			$model = json_encode($model);
-			return $this->fetchPostJson($url,$model);
+			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST);
 		}
 		
 		/**
@@ -143,7 +144,7 @@
 		 */
 		public function getPersonModel(){
 			$url = $this->settings->baseUrl . $this->paths['people']['newPerson'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET,$this->paths['people']['contentType']);
 		}
 		
 		/**
@@ -153,7 +154,27 @@
 		public function createPerson($model){
 			$url = $this->settings->baseUrl . $this->paths['people']['createPerson'] . ".json";
 			$model = json_encode($model);
-			return $this->fetchPostJson($url,$model);
+			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST,$this->paths['people']['contentType']);
+		}
+		
+		
+		/**
+		 * upate person record
+		 * @param object $model
+		 */
+		public function updatePerson($model){
+			$url = str_replace("{personID}", $model['person']['@id'], $this->settings->baseUrl . $this->paths['people']['updatePerson'] . ".json");
+			$model = json_encode($model);
+			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_PUT,$this->paths['people']['contentType']);
+		}
+		
+		/**
+		 * fetch existing person model for editing
+		 * @param number $personId
+		 */
+		public function editPerson($personId){
+			$url = str_replace("{personID}",$personId,$this->settings->baseUrl . $this->paths['people']['editPerson'] . ".json");
+			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET,$this->paths['people']['contentType']);
 		}
 		
 		/**
@@ -161,7 +182,7 @@
 		 */
 		public function getPeopleAttributes($personId){
 			$url = $this->settings->baseUrl . str_replace("{peopleID}",$personId,$this->paths['people']['attributes'].".json");
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -169,7 +190,7 @@
 		 */
 		public function getPeopleAttributeGroups(){
 			$url = $this->settings->baseUrl . $this->paths['people']['attributeGroups'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -192,7 +213,7 @@
 		 */
 		public function getHouseholdModel(){
 			$url = $this->settings->baseUrl . $this->paths['people']['newHousehold'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -202,7 +223,7 @@
 		public function createHousehold($model){
 			$url = $this->settings->baseUrl . $this->paths['people']['createHousehold'] . ".json";
 			$model = json_encode($model);
-			return $this->fetchPostJson($url,$model);
+			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST);
 		}
 		
 		/**
@@ -212,7 +233,7 @@
 		public function searchPeople($attributes){
 			$url = $this->settings->baseUrl . $this->paths['people']['peopleSearch'] . ".json";
 			$url .= "?" . http_build_query($attributes);
-			return $this->fetchGetJson($url);	
+			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET,$this->paths['people']['contentType']);	
 		}
 		
 		
@@ -223,7 +244,7 @@
 		public function getHouseholdsByName($name){
 			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".json";
 			$url .= "?searchFor=" . urlencode($name);
-			return $this->fetchGetJson($url);	
+			return $this->fetchJson($url);	
 		}
 		
 		/**
@@ -231,7 +252,7 @@
 		 */
 		public function getPeopleHouseholdMemberTypes(){
 			$url = $this->settings->baseUrl . $this->paths['people']['householdMemberTypes'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -239,7 +260,7 @@
 		 */
 		public function getBackgroundCheckStatuses(){
 			$url = $this->settings->baseUrl . $this->paths['requirements']['backgroundCheckStatuses'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -260,7 +281,7 @@
 		 */
 		public function getPeopleRequirements($personId){
 			$url = $this->settings->baseUrl . str_replace("{personID}",$personId,$this->paths['requirements']['peopleRequirements'] . ".json");
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -268,7 +289,7 @@
 		 */
 		public function getRequirementStatuses(){
 			$url = $this->settings->baseUrl . $this->paths['requirements']['requirementStatuses'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -288,7 +309,7 @@
 		 */
 		public function getGivingFunds(){
 			$url = $this->settings->baseUrl . $this->paths['giving']['funds'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -296,7 +317,7 @@
 		 */
 		public function getGivingFundTypes(){
 			$url = $this->settings->baseUrl . $this->paths['giving']['fundTypes'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -304,7 +325,7 @@
 		 */
 		public function getGivingContributionTypes(){
 			$url = $this->settings->baseUrl . $this->paths['giving']['contributionTypes'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -312,7 +333,7 @@
 		 */
 		public function getGivingAccountTypes(){
 			$url = $this->settings->baseUrl . $this->paths['giving']['accountTypes'] . ".json";
-			return $this->fetchGetJson($url);
+			return $this->fetchJson($url);
 		}
 		
 		/**
@@ -327,42 +348,28 @@
 			$this->accessToken = (object) $token;
 		}
 		
-		/**
-		 * fetches GET JSON request on F1, parses and returns response
-		 * @param string $url
-		 * @param array $params (assocate array)
-		 */
-		public function fetchGetJson($url,$params = NULL){
-			try{
-				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
-				$o->setToken($this->accessToken->oauth_token, $this->accessToken->oauth_token_secret);
-				if($o->fetch($url,$params)){
-					return json_decode($o->getLastResponse(),true);
-				}
-			}catch(OAuthException $e){
-				die("Error: {$e->getMessage()}\nCode: {$e->getCode()}\nResponse: {$e->lastResponse}\n");
-			}
-			
-		}
 		
 		/**
-		 * fetches POST JSON request on F1, parses and returns response
+		 * fetches JSON request on F1, parses and returns response
 		 * @param string $url
-		 * @param string $data (json data string)
+		 * @param string|array $data
+		 * @param const $method
+		 * @param string $contentType
 		 */
-		public function fetchPostJson($url,$data = NULL){
+		public function fetchJson($url,$data=null,$method=OAUTH_HTTP_METHOD_GET,$contentType="application/json"){
 			try{
 				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
 				$o->setToken($this->accessToken->oauth_token, $this->accessToken->oauth_token_secret);
 				$headers = array(
-					'Content-Type' => 'application/json',		
+					'Content-Type' => $contentType,
 				);
-				if($o->fetch($url, $data, OAUTH_HTTP_METHOD_POST, $headers)){
+				if($o->fetch($url, $data, $method, $headers)){
 					return json_decode($o->getLastResponse(),true);
 				}
 			}catch(OAuthException $e){
 				var_dump($url,$data);
-				die("Error: {$e->getMessage()}\nCode: {$e->getCode()}\nResponse: {$e->lastResponse}\n");
+				var_dump($o->getLastResponseInfo());
+				die("$e \n\nError: {$e->getMessage()}\nCode: {$e->getCode()}\nResponse: {$e->lastResponse}\n");
 			}
 		}
 		
