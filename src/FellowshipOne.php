@@ -49,8 +49,18 @@
 				'updatePerson' =>'/v1/People/{personID}',
 				'newAddress' => '/v1/People/{personID}/Addresses/new',
 				'createAddress' => '/v1/People/{personID}/Addresses',
+				'deleteAddress' => '/v1/People/{personID}/Addresses/{addressID}',
 				'attributeGroups' => '/v1/People/AttributeGroups',
-				'attributes' => '/v1/People/{peopleID}/Attributes',
+				'attributes' => '/v1/People/{personID}/Attributes',
+				'newCommunication' => '/v1/People/{personID}/Communications/New',
+				'createCommunication' => '/v1/People/{personID}/Communications',
+				'deleteCommunication' => '/v1/People/{personID}/Communications/{communicationID}',
+			),
+			'addresses' => array(
+				'addressTypes' => '/v1/Addresses/AddressTypes',	
+			),
+			'communications' => array(
+				'communicationTypes' => '/v1/Communications/CommunicationTypes',
 			),
 			'requirements' => array(
 				'requirementStatuses' => '/v1/requirements/requirementStatuses',
@@ -140,6 +150,16 @@
 		}
 		
 		/**
+		 * delete address record
+		 * @param int $personId
+		 * @param int $addressId
+		 */
+		public function deleteAddress($personId,$addressId){
+			$url = str_replace("{addressID}",$addressId,str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['deleteAddress'] . ".json"));
+			$this->fetchJson($url,null,OAUTH_HTTP_METHOD_DELETE);
+		}
+		
+		/**
 		 * fetch person model from F1
 		 */
 		public function getPersonModel(){
@@ -181,7 +201,7 @@
 		 * fetch attributes for a person 
 		 */
 		public function getPeopleAttributes($personId){
-			$url = $this->settings->baseUrl . str_replace("{peopleID}",$personId,$this->paths['people']['attributes'].".json");
+			$url = $this->settings->baseUrl . str_replace("{personID}",$personId,$this->paths['people']['attributes'].".json");
 			return $this->fetchJson($url);
 		}
 		
@@ -253,6 +273,91 @@
 		public function getPeopleHouseholdMemberTypes(){
 			$url = $this->settings->baseUrl . $this->paths['people']['householdMemberTypes'] . ".json";
 			return $this->fetchJson($url);
+		}
+		
+		/**
+		 * fetch address types
+		 */
+		public function getAddressTypes(){
+			$url = $this->settings->baseUrl . $this->paths['addresses']['addressTypes'] . ".json";
+			return $this->fetchJson($url);
+		}
+		
+		/**
+		 * fetch address type by attributes
+		 * @param array $attributes
+		 * @param array|null $types
+		 */
+		public function getAddressTypeByAttribute($attributes,$types=null){
+			if(!$types) $types = $this->addressTypes;
+			foreach($types['addressTypes']['addressType'] as $type){
+				if(isset($type['@array'])) unset($type['@array']);
+				$match = true;
+				foreach($attributes as $key=>$value){
+					if(isset($type[$key]) && $type[$key]==$value) continue;
+					$match = false;
+				}
+				if($match) return $type;
+			}
+			return null;
+		}
+		
+		/**
+		 * fetch people communications model from F1
+		 * @param int $personId
+		 */
+		public function getPeopleCommunicationModel($personId){
+			$url = str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['newCommunication'] . ".json");
+			return $this->fetchJson($url);
+		}
+		
+		/**
+		 * create new people communication record
+		 * @param object $model
+		 * @param int $personId
+		 */
+		public function createPeopleCommunication($model,$personId){
+			$url = str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['createCommunication'] . ".json");
+			$model = json_encode($model);
+			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST);
+		}
+		
+		/**
+		 * delete people communication record
+		 * @param int $personId
+		 * @param int $communicationId
+		 */
+		public function deletePeopleCommunication($personId,$communicationId){
+			$url = str_replace("{communicationID}",$communicationId,str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['deleteCommunication'] . ".json"));
+			$this->fetchJson($url,null,OAUTH_HTTP_METHOD_DELETE);
+		}
+		
+		/**
+		 * fetch communication types
+		 */
+		public function getCommunicationTypes(){
+			$url = $this->settings->baseUrl . $this->paths['communications']['communicationTypes'] . ".json";
+			return $this->fetchJson($url);
+		}
+		
+		/**
+		 * fetch communication types by attributes
+		 * @param array $attributes
+		 * @param array|null $types
+		 */
+		public function getCommunicationTypesByAttribute($attributes,$types=null){
+			if(!$types) $types = $this->communicationTypes;
+			foreach($types['communicationTypes']['communicationType'] as $type){
+				if(isset($type['@array'])) unset($type['@array']);
+				if(isset($type['@generalType'])) unset($type['@generalType']);
+				$match = true;
+				foreach($attributes as $key=>$value){
+					if(isset($type[$key]) && $type[$key]==$value) continue;
+					$match = false;
+				}
+				if($match) return $type;
+			}
+			return null;
 		}
 		
 		/**
