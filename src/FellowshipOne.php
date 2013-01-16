@@ -19,7 +19,7 @@
 		private $settings;
 		
 		public $paths = array(
-			'tokenCache'=> 'tokens/',//file path to local folder
+			'tokenCache'=> 'tokens/',
 			'general' => array(
 				'requestToken'=>'/v1/Tokens/RequestToken',
 				'accessToken'=>'/v1/Tokens/AccessToken',
@@ -52,9 +52,15 @@
 				'deleteAddress' => '/v1/People/{personID}/Addresses/{addressID}',
 				'attributeGroups' => '/v1/People/AttributeGroups',
 				'attributes' => '/v1/People/{personID}/Attributes',
+				'newAttribute' => '/v1/People/{personID}/Attributes/new',
+				'createAttribute' => '/v1/People/{personID}/Attributes',
+				'editAttribute' => '/v1/People/{personID}/Attributes/{attributeID}/edit',
+				'updateAttribute' => '/v1/People/{personID}/Attributes/{attributeID}',
+				'deleteAttribute' => '/v1/People/{personID}/Attributes/{attributeID}',
 				'newCommunication' => '/v1/People/{personID}/Communications/New',
 				'createCommunication' => '/v1/People/{personID}/Communications',
 				'deleteCommunication' => '/v1/People/{personID}/Communications/{communicationID}',
+				'statuses' => '/v1/People/Statuses',
 			),
 			'addresses' => array(
 				'addressTypes' => '/v1/Addresses/AddressTypes',	
@@ -69,6 +75,7 @@
 			),
 		);
 		
+		public $timezone = "-0600";//timezone of f1 api
 		
 		/**
 		 * contruct fellowship one class with settings array that contains
@@ -110,6 +117,14 @@
 		/**
 		 * BEGIN: F1 API Resource Functions
 		 */
+		
+		/**
+		 * get timestamp ajusted to with timezone offset of api (currently f1 does not include timezone in date/time)
+		 * @param string $datetime
+		 */
+		public function getAdjustedTimestamp($datetime){
+			return strtotime("{$datetime} {$this->timezone}");
+		}
 		
 		/**
 		 * fetch contribution receipt model from F1
@@ -206,6 +221,55 @@
 		}
 		
 		/**
+		 * fetch people attribute model from f1
+		 * @param int $personId
+		 */
+		public function getPeopleAttributeModel($personId){
+			$url = str_replace('{personID}',$personId, $this->settings->baseUrl . $this->paths['people']['newAttribute'] . ".json");
+			return $this->fetchJson($url);
+		}
+		
+		/**
+		 * create new people attribute model
+		 * @param int $personId
+		 * @param object $model
+		 */
+		public function createPeopleAttribute($personId,$model){
+			$url = str_replace("{personID}",$personId,$this->settings->baseUrl . $this->paths['people']['createAttribute'] . ".json");
+			$model = json_encode($model);
+			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST);
+		}
+		
+		/**
+		 * fetch edit model of people attribute
+		 */
+		public function editPeopleAttribute($personId,$attributeId){
+			$url = str_replace("{personID}",$personId,str_replace("{attributeID}",$attributeId,$this->settings->baseUrl . $this->paths['people']['editAttribute'] . ".json"));
+			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET);
+		}
+
+
+		/**
+		 * update people attribute
+		 */
+		public function updatePeopleAttribute($personId,$model){
+			$url = str_replace("{personID}",$personId,str_replace("{attributeID}",$model['attribute']['@id'],$this->settings->baseUrl . $this->paths['people']['updateAttribute'] . ".json"));
+			$model = json_encode($model);
+			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_PUT);
+		}
+		
+		/**
+		 * delete people attribute
+		 * @param int $personId
+		 * @param int $attributeId
+		 */
+		public function deletePeopleAttribute($personId,$attributeId){
+			$url = str_replace("{attributeID}",$attributeId,str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['deleteAttribute'] . ".json"));
+			$this->fetchJson($url,null,OAUTH_HTTP_METHOD_DELETE);
+		}
+		
+		
+		/**
 		 * fetch attribute groups for people
 		 */
 		public function getPeopleAttributeGroups(){
@@ -214,14 +278,95 @@
 		}
 		
 		/**
-		 * get attribute by id
+		 * fetch people statuses from F1
 		 */
-		public function getAttributeIdByName($name){
-			$r = $this->peopleAttributeGroups;
+		public function getPeopleStatuses(){
+			$url = $this->settings->baseUrl . $this->paths['people']['statuses'] . ".json";
+			return $this->fetchJson($url);
+		}
+		
+		/**
+		 * get people status by name
+		 * @param string $name
+		 * @param array|null $statuses
+		 */
+		public function getPeopleStatusByName($name,$statuses=null){
+			$r = $statuses ? $statuses : $this->peopleStatuses;
+			foreach($r['statuses']['status'] as $status){
+				if(strtolower($status['name']) == strtolower($name)){
+					return $status;
+				}
+			}
+			return false;
+		}
+		
+		/**
+		 * get attribute by name
+		 * @param string $name
+		 * @param object|null $attributes
+		 */
+		public function getAttributeByName($name,$attributes=null){
+			$r = $attributes ? $attributes : $this->peopleAttributeGroups;
 			foreach($r['attributeGroups']['attributeGroup'] as $group){
-				foreach($group['attribute'] as $attribute){
-					if(strtolower($attribute['name']) == strtolower($name)){
+				if(isset($group['attribute']) && gettype($group['attribute']) == "array"){
+					foreach($group['attribute'] as $attribute){
+						if(strtolower($attribute['name']) == strtolower($name)){
+							return $attribute;
+						}
+					}
+				}
+			}
+			return null;
+		}
+		
+		/**
+		 * checks f1 person for attribute by attribute name (requires attributes in f1 person object)
+		 * @param array $f1Person
+		 * @param string $attibuteName
+		 * @return string|boolean
+		 */
+		public function personHasAttribute($f1Person,$attributeName){
+			if($f1Person['attributes']){
+				foreach($f1Person['attributes']['attribute'] as $attribute){
+					if(strtolower($attribute['attributeGroup']['attribute']['name']) == strtolower($attributeName)){
 						return $attribute;
+					}
+				}
+			}
+			return false;
+		}
+		
+		/**
+		 * checks f1 person communications for provided email address (requires communications in f1 person object)
+		 * @param array $f1Person
+		 * @param string $email
+		 * @return boolean
+		 */
+		public function personHasEmail($f1Person,$email){
+			if($f1Person['communications']){
+				foreach($f1Person['communications']['communication'] as $item){
+					if($item['communicationGeneralType']!="Email") continue;
+					if(strtolower($item['communicationValue'])==strtolower($email)){
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+		
+		/**
+		 * get attribute group by attribute name
+		 * @param string $name
+		 * $param object|null $attributes
+		 */
+		public function getAttributeGroupByName($name,$attributes=null){
+			$r = $attributes ? $attributes : $this->peopleAttributeGroups;
+			foreach($r['attributeGroups']['attributeGroup'] as $group){
+				if(isset($group['attribute']) && gettype($group['attribute']) == "array"){
+					foreach($group['attribute'] as $attribute){
+						if(strtolower($attribute['name']) == strtolower($name)){
+							return $group;
+						}
 					}
 				}
 			}
@@ -265,6 +410,16 @@
 			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".json";
 			$url .= "?searchFor=" . urlencode($name);
 			return $this->fetchJson($url);	
+		}
+		
+		/**
+		 * fetch households by searching attributes
+		 * @param array $attributes
+		 */
+		public function searchHouseholds($attributes){
+			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".json";
+			$url .= "?" . http_build_query($attributes);
+			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET);
 		}
 		
 		/**
@@ -339,6 +494,7 @@
 			$url = $this->settings->baseUrl . $this->paths['communications']['communicationTypes'] . ".json";
 			return $this->fetchJson($url);
 		}
+		
 		
 		/**
 		 * fetch communication types by attributes
