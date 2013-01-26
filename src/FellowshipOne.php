@@ -5,9 +5,9 @@
 	 * Helper Class for the FellowshipOne.com API.
 	 * @class FellowshipOne
 	 * @license apache license 2.0, code is distributed "as is", use at own risk, all rights reserved
-	 * @copyright 2012 Daniel Boorn
+	 * @copyright 2013 Daniel Boorn
 	 * @author Daniel Boorn daniel.boorn@gmail.com
-	 * @requires (now optional) PHP PECL OAuth, http://php.net/oauth, packaged with OAuth Adapter when PHP PECL OAuth is not present. PECL OAuth is STRONGLY Recommended for Modularity.
+	 * @requires PHP PECL OAuth, http://php.net/oauth
 	 *
 	 */
 	class FellowshipOne{
@@ -16,7 +16,9 @@
 		const TOKEN_CACHE_SESSION = 1;
 		const TOKEN_CACHE_CUSTOM = 2;
 		
-		private $settings;
+		protected $settings;
+		
+		public $error = null;
 		
 		public $paths = array(
 			'tokenCache'=> 'tokens/',
@@ -36,8 +38,8 @@
 				'newContributionReceipt'=>'/giving/v1/contributionreceipts/new',
 				'createContributionReceipt'=>'/giving/v1/contributionreceipts',
 			),
-			'people' => array(
-				'contentType' => 'application/vnd.fellowshiponeapi.com.people.people.v2+json',
+			'people' => array(//!! note the naming convention on the keys (see getModel, newModel, create, update, delete functions) 
+				'contentType' => 'application/vnd.fellowshiponeapi.com.people.people.v2+',
 				'newHousehold' => '/v1/Households/new',
 				'createHousehold' => '/v1/Households',
 				'householdMemberTypes' => '/v1/People/HouseholdMemberTypes',
@@ -49,6 +51,8 @@
 				'updatePerson' =>'/v1/People/{personID}',
 				'newAddress' => '/v1/People/{personID}/Addresses/new',
 				'createAddress' => '/v1/People/{personID}/Addresses',
+				'editAddress' => '/v1/People/{personID}/Addresses/{addressID}/edit',
+				'updateAddress' => '/v1/People/{personID}/Addresses/{addressID}',
 				'deleteAddress' => '/v1/People/{personID}/Addresses/{addressID}',
 				'attributeGroups' => '/v1/People/AttributeGroups',
 				'attributes' => '/v1/People/{personID}/Attributes',
@@ -59,6 +63,8 @@
 				'deleteAttribute' => '/v1/People/{personID}/Attributes/{attributeID}',
 				'newCommunication' => '/v1/People/{personID}/Communications/New',
 				'createCommunication' => '/v1/People/{personID}/Communications',
+				'editCommunication' => '/v1/People/{personID}/Communications/{communicationID}/edit',
+				'updateCommunication' => '/v1/People/{personID}/Communications/{communicationID}',
 				'deleteCommunication' => '/v1/People/{personID}/Communications/{communicationID}',
 				'statuses' => '/v1/People/Statuses',
 			),
@@ -79,23 +85,17 @@
 		
 		/**
 		 * contruct fellowship one class with settings array that contains
-		 * @param unknown_type $settings
+		 * @param array|object $settings
+		 * @return void
 		 */
 		public function __construct($settings){
 			$this->settings = (object) $settings;
-			$this->checkOAuth();
 		}
 		
-		protected function checkOAuth(){
-			if(!class_exists('OAuth')){
-				require('OAuthClient.php');
-				require('OAuth.php');
-			}
-		}
-				
 		/**
 		 * use __get magic method for easy property methods
 		 * @param string $property
+		 * @return mixed
 		 */
 		public function __get($property){
 			$property = 'get'.ucfirst($property);
@@ -104,23 +104,146 @@
 			}		
 		}
 		
+		/**
+		 * get api content type xml|json
+		 * @returns string xml|json
+		 */
+		public function getContentType(){
+			if(isset($this->settings->contentType) && $this->settings->contentType=="xml"){
+				return "xml";
+			}
+			return "json";
+		}
+		
+		/**
+		 * sets response content type to json
+		 * @return void
+		 */
+		public function modeJson(){
+			$this->settings->contentType="json";
+		}
+		
+		/**
+		 * sets response content type to xml
+		 * @return void
+		 */
+		public function modeXml(){
+			$this->settings->contentType="xml";
+		}
 		
 		/**
 		 * dump object to output
 		 * @param object $object
+		 * @return void
 		 */
 		public function debug($object){
 			if($this->settings->debug) var_dump($object);
 		}
 		
+		/**
+		 * build api request url
+		 * @param string $realm
+		 * @param string $method
+		 * @param array $args
+		 * @return string
+		 */
+		protected function buildUrl($realm,$method,$args){
+			$url = "{$this->settings->baseUrl}{$this->paths[$realm][$method]}.{$this->contentType}";
+			foreach($args as $key=>$value){
+				$url = str_replace('{'.$key.'}',$value,$url);
+			}
+			return $url;
+		}
 		
 		/**
 		 * BEGIN: F1 API Resource Functions
 		 */
+
+		/**
+		 * create new model for saving
+		 * @param string $realm
+		 * @param string $resource
+		 * @param array|null $args
+		 * @param string|null $contentType
+		 * @return mixed
+		 */
+		protected function newModel($realm,$resource,$args=null,$contentType=null){
+			$url = $this->buildUrl($realm,"new{$resource}",(array)$args);
+			return $this->fetch($url,null,OAUTH_HTTP_METHOD_GET,$contentType);
+		}
+		
+		/**
+		 * get model(s) for interating
+		 * @param string $realm
+		 * @param string $resource
+		 * @param array|null $args
+		 * @param string|null $contentType
+		 * @return mixed
+		 */
+		protected function getModel($realm,$resource,$args=null,$contentType=null){
+			$url = $this->buildUrl($realm,$resource,(array)$args);
+			return $this->fetch($url,null,OAUTH_HTTP_METHOD_GET,$contentType);
+		}
+		
+		/**
+		 * saves new model
+		 * @param string $realm
+		 * @param string $resource
+		 * @param array|string $model (array=json,string=xml)
+		 * @param array $args
+		 * @param string|null $contentType
+		 * @return mixed
+		 */
+		protected function create($realm,$resource,$model,$args,$contentType=null){
+			$url = $this->buildUrl($realm,"create{$resource}",$args);
+			$model = is_array($model) ? json_encode($model) : $model;
+			return $this->fetch($url,$model,OAUTH_HTTP_METHOD_POST,$contentType);
+		}
+		
+		/**
+		 * fetches model for editing
+		 * @param string $realm
+		 * @param string $resource
+		 * @param array $args
+		 * @param string|null $contentType
+		 * @return mixed
+		 */
+		protected function edit($realm,$resource,$args,$contentType=null){
+			$url = $this->buildUrl($realm,"edit{$resource}",$args);
+			return $this->fetch($url,null,OAUTH_HTTP_METHOD_GET,$contentType);
+		}
+		
+		/**
+		 * saves editing model
+		 * @param string $realm
+		 * @param string $resource
+		 * @param array|string $model (array=json,string=xml)
+		 * @param string|null $contentType
+		 * @return mixed
+		 */
+		protected function update($realm,$resource,$model,$args,$contentType=null){
+			$url = $this->buildUrl($realm,"update{$resource}",$args);
+			$model = is_array($model) ? json_encode($model) : $model;
+			return $this->fetch($url,$model,OAUTH_HTTP_METHOD_PUT,$contentType);
+		}
+		
+		/**
+		 * deletes record
+		 * @param string $realm
+		 * @param string $resource
+		 * @param array $args
+		 * @return mixed
+		 */
+		protected function delete($realm,$resource,$args){
+			$url = $this->buildUrl($realm,"update{$resource}",$args);
+			return $this->fetch($url,null,OAUTH_HTTP_METHOD_DELETE);
+		}
+		
 		
 		/**
 		 * get timestamp ajusted to with timezone offset of api (currently f1 does not include timezone in date/time)
 		 * @param string $datetime
+		 * @return string
 		 */
 		public function getAdjustedTimestamp($datetime){
 			return strtotime("{$datetime} {$this->timezone}");
@@ -128,167 +251,168 @@
 		
 		/**
 		 * fetch contribution receipt model from F1
+		 * @return mixed
 		 */
 		public function getContributionReceiptModel(){
-			$url = $this->settings->baseUrl . $this->paths['giving']['newContributionReceipt'] . ".json";
-			return $this->fetchJson($url);
+			return $this->newModel('giving','ContributionReceipt');
 		}
 		
 		/**
 		 * create new contribution receipt
 		 * @param object $model
+		 * @return mixed
 		 */
 		public function createContributionReceipt($model){
-			$url = $this->settings->baseUrl . $this->paths['giving']['createContributionReceipt'] . ".json";
-			$model = json_encode($model);
-			return $this->fetchJson($url,$model);
+			return $this->create('giving','ContributionReceipt',$model);
 		}
 		
 		/**
 		 * fetch address model from F1
 		 * @param int $personId
+		 * @return mixed
 		 */
 		public function getAddressModel($personId){
-			$url = str_replace('{personID}',$personId, $this->settings->baseUrl . $this->paths['people']['newAddress'] . ".json");
-			return $this->fetchJson($url);
+			return $this->newModel('people','Address',array('personID'=>$personId));
 		}
 		
 		/**
 		 * create new address record
 		 * @param object $model
 		 * @param int $personId
+		 * @return mixed
 		 */
 		public function createAddress($model,$personId){
-			$url = str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['createAddress'] . ".json");
-			$model = json_encode($model);
-			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST);
+			return $this->create('people','Address',$model,array('personID'=>$personId));
 		}
 		
 		/**
 		 * delete address record
 		 * @param int $personId
 		 * @param int $addressId
+		 * @return mixed
 		 */
 		public function deleteAddress($personId,$addressId){
-			$url = str_replace("{addressID}",$addressId,str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['deleteAddress'] . ".json"));
-			$this->fetchJson($url,null,OAUTH_HTTP_METHOD_DELETE);
+			return $this->delete('people','Address',array('personID'=>$personId,'addressID'=>$addressId));
 		}
 		
 		/**
 		 * fetch person model from F1
+		 * @return mixed
 		 */
 		public function getPersonModel(){
-			$url = $this->settings->baseUrl . $this->paths['people']['newPerson'] . ".json";
-			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET,$this->paths['people']['contentType']);
+			return $this->newModel('people','Person',null,$this->paths['people']['contentType'].$this->contentType);
 		}
 		
 		/**
 		 * create new person record
 		 * @param object $model
+		 * @return mixed
 		 */
 		public function createPerson($model){
-			$url = $this->settings->baseUrl . $this->paths['people']['createPerson'] . ".json";
-			$model = json_encode($model);
-			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST,$this->paths['people']['contentType']);
+			return $this->create('people','Person',$model,null,$this->paths['people']['contentType'].$this->contentType);
 		}
 		
 		
 		/**
 		 * upate person record
 		 * @param object $model
+		 * @param int $personId (optional for xml)
+		 * @return mixed
 		 */
-		public function updatePerson($model){
-			$url = str_replace("{personID}", $model['person']['@id'], $this->settings->baseUrl . $this->paths['people']['updatePerson'] . ".json");
-			$model = json_encode($model);
-			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_PUT,$this->paths['people']['contentType']);
+		public function updatePerson($model,$personId=null){
+			return $this->update('people','Person',$model,array('personID'=>$personId ? $personId : $model['person']['@id']),$this->paths['people']['contentType'].$this->contentType);
 		}
 		
 		/**
 		 * fetch existing person model for editing
 		 * @param number $personId
+		 * @return mixed
 		 */
 		public function editPerson($personId){
-			$url = str_replace("{personID}",$personId,$this->settings->baseUrl . $this->paths['people']['editPerson'] . ".json");
-			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET,$this->paths['people']['contentType']);
+			return $this->edit('people','Person',array('personID'=>$personId),$this->paths['people']['contentType'].$this->contentType);
 		}
 		
 		/**
 		 * fetch attributes for a person 
+		 * @return mixed
 		 */
 		public function getPeopleAttributes($personId){
-			$url = $this->settings->baseUrl . str_replace("{personID}",$personId,$this->paths['people']['attributes'].".json");
-			return $this->fetchJson($url);
+			return $this->getModel('people','attributes',array('personID'=>$personId));
 		}
 		
 		/**
 		 * fetch people attribute model from f1
 		 * @param int $personId
+		 * @return mixed
 		 */
 		public function getPeopleAttributeModel($personId){
-			$url = str_replace('{personID}',$personId, $this->settings->baseUrl . $this->paths['people']['newAttribute'] . ".json");
-			return $this->fetchJson($url);
+			return $this->newModel('people','Attribute',array("personID"=>$personId));
 		}
 		
 		/**
 		 * create new people attribute model
 		 * @param int $personId
 		 * @param object $model
+		 * @return mixed
 		 */
 		public function createPeopleAttribute($personId,$model){
-			$url = str_replace("{personID}",$personId,$this->settings->baseUrl . $this->paths['people']['createAttribute'] . ".json");
-			$model = json_encode($model);
-			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST);
+			return $this->create('people','Attribute',$model,array('personID'=>$personId));
 		}
 		
 		/**
 		 * fetch edit model of people attribute
+		 * @param int $personId
+		 * @param int $attributeId
+		 * @return mixed
 		 */
 		public function editPeopleAttribute($personId,$attributeId){
-			$url = str_replace("{personID}",$personId,str_replace("{attributeID}",$attributeId,$this->settings->baseUrl . $this->paths['people']['editAttribute'] . ".json"));
-			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET);
+			return $this->edit('people','Attribute',array('personID'=>$personId,'attributeID'=>$attributeId));
 		}
 
 
 		/**
 		 * update people attribute
+		 * @param int $personId
+		 * @param array|string $model (array=json,string=xml)
+		 * @param int $attributeId
+		 * @return mixed
 		 */
-		public function updatePeopleAttribute($personId,$model){
-			$url = str_replace("{personID}",$personId,str_replace("{attributeID}",$model['attribute']['@id'],$this->settings->baseUrl . $this->paths['people']['updateAttribute'] . ".json"));
-			$model = json_encode($model);
-			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_PUT);
+		public function updatePeopleAttribute($personId,$model,$attributeId=null){
+			return $this->update('people','Attribute',$model,array('personID'=>$personId,'attributeID'=>$attributeId ? $attributeId : $model['attribute']['@id']));
 		}
 		
 		/**
 		 * delete people attribute
 		 * @param int $personId
 		 * @param int $attributeId
+		 * @return mixed
 		 */
 		public function deletePeopleAttribute($personId,$attributeId){
-			$url = str_replace("{attributeID}",$attributeId,str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['deleteAttribute'] . ".json"));
-			$this->fetchJson($url,null,OAUTH_HTTP_METHOD_DELETE);
+			return $this->delete('people','Attribute',array('personID'=>$personId,'attributeID'=>$attributeId));
 		}
 		
 		
 		/**
 		 * fetch attribute groups for people
+		 * @return mixed
 		 */
 		public function getPeopleAttributeGroups(){
-			$url = $this->settings->baseUrl . $this->paths['people']['attributeGroups'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('people','attributeGroups');
 		}
 		
 		/**
 		 * fetch people statuses from F1
+		 * @return mixed
 		 */
 		public function getPeopleStatuses(){
-			$url = $this->settings->baseUrl . $this->paths['people']['statuses'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('people','statuses');
 		}
 		
 		/**
 		 * get people status by name
 		 * @param string $name
 		 * @param array|null $statuses
+		 * @return mixed
 		 */
 		public function getPeopleStatusByName($name,$statuses=null){
 			$r = $statuses ? $statuses : $this->peopleStatuses;
@@ -304,6 +428,7 @@
 		 * get attribute by name
 		 * @param string $name
 		 * @param object|null $attributes
+		 * @return mixed
 		 */
 		public function getAttributeByName($name,$attributes=null){
 			$r = $attributes ? $attributes : $this->peopleAttributeGroups;
@@ -318,7 +443,7 @@
 			}
 			return null;
 		}
-		
+				
 		/**
 		 * checks f1 person for attribute by attribute name (requires attributes in f1 person object)
 		 * @param array $f1Person
@@ -358,6 +483,7 @@
 		 * get attribute group by attribute name
 		 * @param string $name
 		 * $param object|null $attributes
+		 * @return mixed
 		 */
 		public function getAttributeGroupByName($name,$attributes=null){
 			$r = $attributes ? $attributes : $this->peopleAttributeGroups;
@@ -375,73 +501,107 @@
 		
 		/**
 		 * fetch household model from F1
+		 * @return mixed
 		 */
 		public function getHouseholdModel(){
-			$url = $this->settings->baseUrl . $this->paths['people']['newHousehold'] . ".json";
-			return $this->fetchJson($url);
+			return $this->newModel('people','Household');
 		}
 		
 		/**
 		 * create new household
 		 * @param object $model
+		 * @return mixed
 		 */
 		public function createHousehold($model){
-			$url = $this->settings->baseUrl . $this->paths['people']['createHousehold'] . ".json";
-			$model = json_encode($model);
-			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST);
+			return $this->create('people','Household',$model);
 		}
 		
 		/**
 		 * fetch people by searching attributes
 		 * @param array $attributes
+		 * @return mixed
 		 */
 		public function searchPeople($attributes){
-			$url = $this->settings->baseUrl . $this->paths['people']['peopleSearch'] . ".json";
+			$url = $this->settings->baseUrl . $this->paths['people']['peopleSearch'] . ".{$this->contentType}";
 			$url .= "?" . http_build_query($attributes);
-			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET,$this->paths['people']['contentType']);	
+			return $this->fetch($url,null,OAUTH_HTTP_METHOD_GET,$this->paths['people']['contentType'].$this->contentType);	
 		}
 		
 		
 		/**
+		 * find person by attribute comment value
+		 * @param string $attrId
+		 * @param string $attrComment
+		 * @param int $lmit (0=unlimited)
+		 * @param int $currentPage
+		 * @return array $matches
+		 */
+		public function findPeopleByAttributeComment($attrId,$attrComment,$limit=0,$currentPage=1){
+			$criteria = array('attribute'=>$attrId,'include'=>'attributes','page'=>$currentPage);
+			$r = $this->searchPeople($criteria);
+			
+			$matches = array();
+			if((int)$r['results']['@count']>0){
+				foreach($r['results']['person'] as $person){
+					if($person['attributes']){
+						foreach($person['attributes']['attribute'] as $attribute){
+							if($attribute['attributeGroup']['attribute']['@id']==$attrId &&  $attribute['comment'] == $attrComment){
+								$matches[] = $person;
+								if($limit >0 && count($matches)==$limit) return $matches;
+							}
+						}
+					}
+				}
+				if((int)$r['results']['@additionalPages']>0){
+					return array_merge($matches,$this->findPeopleByAttributeComment($attrId,$attrComment,$limit,$currentPage+1));
+				}
+			}
+			return $matches;
+		}
+		
+		/**
 		 * fetch households by name search
 		 * @param string $name
+		 * @return mixed
 		 */
 		public function getHouseholdsByName($name){
-			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".json";
+			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".{$this->contentType}";
 			$url .= "?searchFor=" . urlencode($name);
-			return $this->fetchJson($url);	
+			return $this->fetch($url);	
 		}
 		
 		/**
 		 * fetch households by searching attributes
 		 * @param array $attributes
+		 * @return mixed
 		 */
 		public function searchHouseholds($attributes){
-			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".json";
+			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".{$this->contentType}";
 			$url .= "?" . http_build_query($attributes);
-			return $this->fetchJson($url,null,OAUTH_HTTP_METHOD_GET);
+			return $this->fetch($url,null,OAUTH_HTTP_METHOD_GET);
 		}
 		
 		/**
 		 * fetch household member types
+		 * @return mixed
 		 */
 		public function getPeopleHouseholdMemberTypes(){
-			$url = $this->settings->baseUrl . $this->paths['people']['householdMemberTypes'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('people','householdMemberTypes');
 		}
 		
 		/**
 		 * fetch address types
+		 * @return mixed
 		 */
 		public function getAddressTypes(){
-			$url = $this->settings->baseUrl . $this->paths['addresses']['addressTypes'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('addresses','addressTypes');
 		}
 		
 		/**
 		 * fetch address type by attributes
 		 * @param array $attributes
 		 * @param array|null $types
+		 * @return mixed
 		 */
 		public function getAddressTypeByAttribute($attributes,$types=null){
 			if(!$types) $types = $this->addressTypes;
@@ -460,39 +620,59 @@
 		/**
 		 * fetch people communications model from F1
 		 * @param int $personId
+		 * @return mixed
 		 */
 		public function getPeopleCommunicationModel($personId){
-			$url = str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['newCommunication'] . ".json");
-			return $this->fetchJson($url);
+			return $this->newModel('people','Communication',array('personID'=>$personId));
+		}
+		
+		/**
+		 * fetch edit model of people communiction record
+		 * @param int $commId
+		 * @param int $personId
+		 * @return mixed
+		 */
+		public function editPeopleCommunication($commId,$personId){
+			return $this->edit('people','Communication',array('communicationID'=>$commId, 'personID'=>$personId));
+		}
+		
+		/**
+		 * update people communication record
+		 * @param object $model
+		 * @param int $personId
+		 * @param int $communicationId (optional for xml)
+		 * @return mixed
+		 */
+		public function updatePeopleCommunication($model,$personId,$communicationId){
+			return $this->update('people','Communication',$model,array('personID'=>$personId,'communicationID'=>$communicationId));
 		}
 		
 		/**
 		 * create new people communication record
 		 * @param object $model
 		 * @param int $personId
+		 * @return mixed
 		 */
 		public function createPeopleCommunication($model,$personId){
-			$url = str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['createCommunication'] . ".json");
-			$model = json_encode($model);
-			return $this->fetchJson($url,$model,OAUTH_HTTP_METHOD_POST);
+			return $this->create('people','Communication',$model,array('personID'=>$personId));
 		}
 		
 		/**
 		 * delete people communication record
 		 * @param int $personId
 		 * @param int $communicationId
+		 * @return mixed
 		 */
 		public function deletePeopleCommunication($personId,$communicationId){
-			$url = str_replace("{communicationID}",$communicationId,str_replace('{personID}',$personId,$this->settings->baseUrl . $this->paths['people']['deleteCommunication'] . ".json"));
-			$this->fetchJson($url,null,OAUTH_HTTP_METHOD_DELETE);
+			return $this->delete('people','Communication',array('personID'=>$personId,'communicationID'=>$communicationId));
 		}
 		
 		/**
 		 * fetch communication types
+		 * @return mixed
 		 */
 		public function getCommunicationTypes(){
-			$url = $this->settings->baseUrl . $this->paths['communications']['communicationTypes'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('communications','communicationTypes');
 		}
 		
 		
@@ -500,6 +680,7 @@
 		 * fetch communication types by attributes
 		 * @param array $attributes
 		 * @param array|null $types
+		 * @return mixed
 		 */
 		public function getCommunicationTypesByAttribute($attributes,$types=null){
 			if(!$types) $types = $this->communicationTypes;
@@ -518,14 +699,15 @@
 		
 		/**
 		 * fetch background check statuses
+		 * @return mixed
 		 */
 		public function getBackgroundCheckStatuses(){
-			$url = $this->settings->baseUrl . $this->paths['requirements']['backgroundCheckStatuses'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('requirements','backgroundCheckStatuses');
 		}
 		
 		/**
 		 * fetch background check status by name
+		 * @return mixed
 		 */
 		public function getBackgroundCheckStatusByName($name){
 			$statuses = $this->backgroundCheckStatuses;
@@ -539,22 +721,23 @@
 		
 		/**
 		 * fetch people requirements
+		 * @return mixed
 		 */
 		public function getPeopleRequirements($personId){
-			$url = $this->settings->baseUrl . str_replace("{personID}",$personId,$this->paths['requirements']['peopleRequirements'] . ".json");
-			return $this->fetchJson($url);
+			return $this->getModel('requirements','peopleRequirements');
 		}
 		
 		/**
 		 * fetch requirement statuses
+		 * @return mixed
 		 */
 		public function getRequirementStatuses(){
-			$url = $this->settings->baseUrl . $this->paths['requirements']['requirementStatuses'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('requirements','requirementStatuses');
 		}
 		
 		/**
 		 * fetches requirement status by name
+		 * @return mixed
 		 */
 		public function getRequirementStatusByName($name){
 			$statuses = $this->requirementStatuses;
@@ -567,43 +750,59 @@
 	
 		/**
 		 * fetch giving funds
+		 * @return mixed
 		 */
 		public function getGivingFunds(){
-			$url = $this->settings->baseUrl . $this->paths['giving']['funds'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('giving','funds');
 		}
 		
 		/**
 		 * fetch giving fund types
+		 * @return mixed
 		 */
 		public function getGivingFundTypes(){
-			$url = $this->settings->baseUrl . $this->paths['giving']['fundTypes'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('giving','fundTypes');
 		}
 		
 		/**
 		 * fetch giving contribution types
+		 * @return mixed
 		 */
 		public function getGivingContributionTypes(){
-			$url = $this->settings->baseUrl . $this->paths['giving']['contributionTypes'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('giving','contributionTypes');
 		}
 		
 		/**
 		 * fetch giving account types
+		 * @return mixed
 		 */
 		public function getGivingAccountTypes(){
-			$url = $this->settings->baseUrl . $this->paths['giving']['accountTypes'] . ".json";
-			return $this->fetchJson($url);
+			return $this->getModel('giving','accountTypes');
 		}
+		
+		/**
+		 * get person information by login credentials
+		 * @param string $username
+		 * @param string $password
+		 * @return array|boolean
+		 */
+		public function getPersonByCredentials($username,$password){
+			$token = $this->obtainCredentialsBasedAccessToken($username,$password,true);
+			if(!$token) return false;
+			$url = $token->headers['Content-Location'].".{$this->contentType}";
+			return $this->fetch($url);
+		}
+		
 		
 		/**
 		 * BEGIN: OAuth Functions
 		 */
 		
+		
 		/**
 		 * directly set access token. e.g. 1st party token based authentication
 		 * @param array $token
+		 * @return void
 		 */
 		public function setAccessToken($token){
 			$this->accessToken = (object) $token;
@@ -616,8 +815,10 @@
 		 * @param string|array $data
 		 * @param const $method
 		 * @param string $contentType
+		 * @return void
 		 */
-		public function fetchJson($url,$data=null,$method=OAUTH_HTTP_METHOD_GET,$contentType="application/json"){
+		public function fetch($url,$data=null,$method=OAUTH_HTTP_METHOD_GET,$contentType=null){
+			if(!$contentType) $contentType = "application/$this->contentType";
 			try{
 				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
 				$o->setToken($this->accessToken->oauth_token, $this->accessToken->oauth_token_secret);
@@ -625,12 +826,21 @@
 					'Content-Type' => $contentType,
 				);
 				if($o->fetch($url, $data, $method, $headers)){
-					return json_decode($o->getLastResponse(),true);
+					if(str_replace("json","",$contentType)!=$contentType){
+						return json_decode($o->getLastResponse(),true);
+					}else{
+						return $o->getLastResponse();
+					}
 				}
 			}catch(OAuthException $e){
-				var_dump($url,$data);
-				var_dump($o->getLastResponseInfo());
-				die("$e \n\nError: {$e->getMessage()}\nCode: {$e->getCode()}\nResponse: {$e->lastResponse}\n");
+				$this->error = array(
+					'error'=>true,
+					'code'=>$e->getCode(),
+					'response'=>$e->lastResponse,	
+					'data'=>$data,
+					'url'=>$url,
+				);
+				return false;
 			}
 		}
 		
@@ -700,6 +910,7 @@
 		 * save access token to file by username
 		 * @param string $username
 		 * @param array $token
+		 * @return void
 		 */
 		protected function saveFileAccessToken($username,$token){
 			$fileName = $this->getAccessTokenFileName($username);
@@ -709,6 +920,7 @@
 		/**
 		 * save access token to session
 		 * @param array $token
+		 * @return void
 		 */
 		protected function saveSessionAccessToken($token){
 			$_SESSION['F1AccessToken'] = (object) $token;
@@ -719,6 +931,7 @@
 		 * @param string $username
 		 * @param array $token
 		 * @param const $cacheType
+		 * @return void
 		 */
 		protected function saveAccessToken($username,$token,$cacheType,$custoHandlers){
 			
@@ -762,6 +975,28 @@
 		}
 
 		/**
+		 * parse header string to array
+		 * @source http://php.net/manual/en/function.http-parse-headers.php#77241
+		 * @param string $header
+		 * @return array $retVal
+		 */
+		public static function http_parse_headers( $header ){
+			$retVal = array();
+			$fields = explode("\r\n", preg_replace('/\x0D\x0A[\x09\x20]+/', ' ', $header));
+			foreach( $fields as $field ) {
+				if( preg_match('/([^:]+): (.+)/m', $field, $match) ) {
+					$match[1] = preg_replace('/(?<=^|[\x09\x20\x2D])./e', 'strtoupper("\0")', strtolower(trim($match[1])));
+					if( isset($retVal[$match[1]]) ) {
+						$retVal[$match[1]] = array($retVal[$match[1]], $match[2]);
+					} else {
+						$retVal[$match[1]] = trim($match[2]);
+					}
+				}
+			}
+			return $retVal;
+		}
+
+		/**
 		 * obtain credentials based access token from API
 		 * @param string $username
 		 * @param string $password
@@ -774,7 +1009,13 @@
 				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
 				return (object) $o->getAccessToken($url);
 			}catch(OAuthException $e){
-				die("Error: {$e->getMessage()}\nCode: {$e->getCode()}\nResponse: {$e->lastResponse}\n");
+				$this->error = array(
+					'error'=>true,
+					'code'=>$e->getCode(),
+					'response'=>$e->lastResponse,
+					'url'=>$url,
+				);
+				return false;
 			}
 		}
 		
@@ -792,7 +1033,13 @@
 				$url = "{$this->settings->baseUrl}{$this->paths['general']['requestToken']}";
 				return (object) $o->getAccessToken($url);
 			}catch(OAuthException $e){
-				die("Error: {$e->getMessage()}\nCode: {$e->getCode()}\nResponse: {$e->lastResponse}\n");
+				$this->error = array(
+					'error'=>true,
+					'code'=>$e->getCode(),
+					'response'=>$e->lastResponse,
+					'url'=>$url,
+				);
+				return false;
 			}
 		}
 		
@@ -800,6 +1047,7 @@
 		 * redirect user for 3rd party authorization with callback url
 		 * @param object $token
 		 * @param string $callbackUrl
+		 * @return mixed
 		 */
 		protected function redirectUserAuthorization($token,$callbackUrl){
 			try{
@@ -810,7 +1058,13 @@
 				@header("Location:{$url}");
 				die("<script>window.location='{$url}'</script><meta http-equiv='refresh' content='0;URL=\"{$url}\"'>");//backup redirect
 			}catch(OAuthException $e){
-				die("Error: {$e->getMessage()}\nCode: {$e->getCode()}\nResponse: {$e->lastResponse}\n");
+				$this->error = array(
+					'error'=>true,
+					'code'=>$e->getCode(),
+					'response'=>$e->lastResponse,
+					'url'=>$url,
+				);
+				return false;
 			}
 		}
 		
@@ -832,7 +1086,13 @@
 				$o->setToken($requestToken->oauth_token, $requestToken->oauth_token_secret);
 				return (object) $o->getAccessToken($url);
 			}catch(OAuthException $e){
-				die("Error: {$e->getMessage()}\nCode: {$e->getCode()}\nResponse: {$e->lastResponse}\n");
+				$this->error = array(
+					'error'=>true,
+					'code'=>$e->getCode(),
+					'response'=>$e->lastResponse,
+					'url'=>$url,
+				);
+				return false;
 			}
 		}
 		
