@@ -1,11 +1,101 @@
 <?php 
 
+	/**
+	 * F1 Helper Node for the FellowshipOne Helper Class, it's chainable!
+	 * @class F1Node
+	 * @license apache license 2.0, code is distributed "as is", use at own risk, all rights reserved
+	 * @copyright 2012 Daniel Boorn
+	 * @author Daniel Boorn daniel.boorn@gmail.com
+	 * @requires PHP PECL OAuth, http://php.net/oauth
+	 *
+	 */
+	class F1Node{
+		public $returnType;
+		public $name;
+		public $find;
+		public $resource;
+		public $contents;
+		public static $f1;
+	
+		/**
+		 * construct
+		 * @param FellowshipOne $f1
+		 * @param string $returnType
+		 */
+		public function __construct($f1,$returnType=""){
+			$this->returnType = $returnType;
+			self::$f1 = $f1;
+		}
+	
+		/**
+		 * search resource by criteria
+		 * @param array $criteria
+		 * @return F1Node
+		 */
+		public function with($criteria){
+			$fn = "search" . ucfirst($this->resource) . $this->returnType;
+			$this->contents = self::$f1->{$fn}($criteria);
+			return $this;
+		}
+		
+		/**
+		 * returns contents
+		 * @param string|null $what
+		 * @return mixed
+		 */
+		public function get($what=null){
+			if(!$what) return $this->contents;
+			$resultsName = FellowshipOne::$paths[$this->resource]['resultsName'];
+			$results = $this->contents['results'][$resultsName];
+			if(!$results) return $results;
+			switch($what){
+				case "all": return $results;
+				case "first": return $results[0];
+				case "last": return $results[count($results)-1];
+				default: return $results;
+			}
+		}
+		
+		
+		public function edit($modifiers){
+			//what am i editing? 
+			$items = $this->get('all');
+				
+		}
+	
+		/**
+		 * returns true if name is f1 resource
+		 * @param string $name
+		 * @return boolean
+		 */
+		public function isResource($name){
+			foreach(FellowshipOne::$paths as $key=>$value){
+				if($key==$name) return true;
+			}
+			return false;
+		}
+	
+		/**
+		 * magic function
+		 * @param string $name
+		 * @param array $args
+		 * @return mixed
+		 */
+		public function __call($name,$args){
+				
+			if($this->isResource($name)){
+				$this->resource = $name;
+				return $this;
+			}
+				
+		}
+	}
 	
 	/**
 	 * Helper Class for the FellowshipOne.com API.
 	 * @class FellowshipOne
 	 * @license apache license 2.0, code is distributed "as is", use at own risk, all rights reserved
-	 * @copyright 2013 Daniel Boorn
+	 * @copyright 2012 Daniel Boorn
 	 * @author Daniel Boorn daniel.boorn@gmail.com
 	 * @requires PHP PECL OAuth, http://php.net/oauth
 	 *
@@ -17,10 +107,12 @@
 		const TOKEN_CACHE_CUSTOM = 2;
 		
 		protected $settings;
+		protected $modeCache;
+		
 		
 		public $error = null;
 		
-		public $paths = array(
+		public static $paths = array(
 			'tokenCache'=> 'tokens/',
 			'general' => array(
 				'requestToken'=>'/v1/Tokens/RequestToken',
@@ -35,10 +127,12 @@
 				'contributionTypes'=>'/giving/v1/contributiontypes',
 				'fundTypes'=>'/giving/v1/funds/fundtypes',
 				'funds'=>'/giving/v1/funds',
+				'subFunds'=>'/giving/v1/funds/{fundID}/subfunds',
 				'newContributionReceipt'=>'/giving/v1/contributionreceipts/new',
 				'createContributionReceipt'=>'/giving/v1/contributionreceipts',
 			),
 			'people' => array(//!! note the naming convention on the keys (see getModel, newModel, create, update, delete functions) 
+				'resultsName' => 'person',//for F1Node,
 				'contentType' => 'application/vnd.fellowshiponeapi.com.people.people.v2+',
 				'newHousehold' => '/v1/Households/new',
 				'createHousehold' => '/v1/Households',
@@ -82,6 +176,8 @@
 		);
 		
 		public $timezone = "-0600";//timezone of f1 api
+		public $timezoneName = "Central Standard Time";
+		public $timezoneAbr = "CST";
 		
 		/**
 		 * contruct fellowship one class with settings array that contains
@@ -90,6 +186,7 @@
 		 */
 		public function __construct($settings){
 			$this->settings = (object) $settings;
+			self::$paths['tokenCache'] = sprintf("%stokens/",APPPATH);
 		}
 		
 		/**
@@ -116,10 +213,29 @@
 		}
 		
 		/**
+		 * chainable query function
+		 * @return F1Node
+		 */
+		public function find(){
+			return new F1Node($this);
+		}
+		
+		/**
+		 * reverts response content type to cached version
+		 * @return void
+		 */
+		public function revertMode(){
+			if($this->modeCache){
+				$this->settings->contentType = $this->modeCache;
+			}
+		}
+		
+		/**
 		 * sets response content type to json
 		 * @return void
 		 */
 		public function modeJson(){
+			$this->modeCache = $this->contentType;
 			$this->settings->contentType="json";
 		}
 		
@@ -128,6 +244,7 @@
 		 * @return void
 		 */
 		public function modeXml(){
+			$this->modeCache = $this->contentType;
 			$this->settings->contentType="xml";
 		}
 		
@@ -148,7 +265,7 @@
 		 * @return string
 		 */
 		protected function buildUrl($realm,$method,$args){
-			$url = "{$this->settings->baseUrl}{$this->paths[$realm][$method]}.{$this->contentType}";
+			$url = $this->settings->baseUrl . self::$paths[$realm][$method] . ".{$this->contentType}";
 			foreach($args as $key=>$value){
 				$url = str_replace('{'.$key.'}',$value,$url);
 			}
@@ -194,7 +311,8 @@
 		 * @param string|null $contentType
 		 * @return mixed
 		 */
-		protected function create($realm,$resource,$model,$args,$contentType=null){
+		protected function create($realm,$resource,$model,$args=null,$contentType=null){
+			if(!$args) $args = array();
 			$url = $this->buildUrl($realm,"create{$resource}",$args);
 			$model = is_array($model) ? json_encode($model) : $model;
 			return $this->fetch($url,$model,OAUTH_HTTP_METHOD_POST,$contentType);
@@ -250,6 +368,21 @@
 		}
 		
 		/**
+		 * returns adjusted DateTime to API time from timestamp
+		 * @param number $timestamp
+		 * @param boolean $returnFormatted
+		 * @return DateTime $date
+		 */
+		public function getAdjustedDateTime($timestamp,$returnFormatted=true){
+			$date = new DateTime();
+			$date->setTimestamp($timestamp);
+			$date->setTimezone(new DateTimeZone(timezone_name_from_abbr($this->timezoneAbr)));
+			if(!$returnFormatted) return $date;
+			//e.g. 2008-08-25T00:00:00
+			return $date->format('Y-m-d\TH:i:s');
+		}
+		
+		/**
 		 * fetch contribution receipt model from F1
 		 * @return mixed
 		 */
@@ -286,6 +419,28 @@
 		}
 		
 		/**
+		 * edit address record
+		 * @param int $personId
+		 * @param int $addressId
+		 * @return mixed
+		 */
+		public function editAddress($personId,$addressId){
+			return $this->edit('people','Address',array('personID'=>$personId,'addressID'=>$addressId));
+		}
+
+		/**
+		 * update address record
+		 * @param array|string (array=json|string=xml)
+		 * @param int $personId
+		 * @param int $addressId
+		 * @return mixed
+		 */
+		public function updateAddress($model,$personId,$addressId){
+			return $this->update('people','Address',$model,array('personID'=>$personId,'addressID'=>$addressId));
+		}
+		
+		
+		/**
 		 * delete address record
 		 * @param int $personId
 		 * @param int $addressId
@@ -300,7 +455,7 @@
 		 * @return mixed
 		 */
 		public function getPersonModel(){
-			return $this->newModel('people','Person',null,$this->paths['people']['contentType'].$this->contentType);
+			return $this->newModel('people','Person',null,self::$paths['people']['contentType'].$this->contentType);
 		}
 		
 		/**
@@ -309,7 +464,7 @@
 		 * @return mixed
 		 */
 		public function createPerson($model){
-			return $this->create('people','Person',$model,null,$this->paths['people']['contentType'].$this->contentType);
+			return $this->create('people','Person',$model,array(),self::$paths['people']['contentType'].$this->contentType);
 		}
 		
 		
@@ -320,7 +475,7 @@
 		 * @return mixed
 		 */
 		public function updatePerson($model,$personId=null){
-			return $this->update('people','Person',$model,array('personID'=>$personId ? $personId : $model['person']['@id']),$this->paths['people']['contentType'].$this->contentType);
+			return $this->update('people','Person',$model,array('personID'=>$personId ? $personId : $model['person']['@id']),self::$paths['people']['contentType'].$this->contentType);
 		}
 		
 		/**
@@ -329,7 +484,7 @@
 		 * @return mixed
 		 */
 		public function editPerson($personId){
-			return $this->edit('people','Person',array('personID'=>$personId),$this->paths['people']['contentType'].$this->contentType);
+			return $this->edit('people','Person',array('personID'=>$personId),self::$paths['people']['contentType'].$this->contentType);
 		}
 		
 		/**
@@ -522,9 +677,9 @@
 		 * @return mixed
 		 */
 		public function searchPeople($attributes){
-			$url = $this->settings->baseUrl . $this->paths['people']['peopleSearch'] . ".{$this->contentType}";
+			$url = $this->settings->baseUrl . self::$paths['people']['peopleSearch'] . ".{$this->contentType}";
 			$url .= "?" . http_build_query($attributes);
-			return $this->fetch($url,null,OAUTH_HTTP_METHOD_GET,$this->paths['people']['contentType'].$this->contentType);	
+			return $this->fetch($url,null,OAUTH_HTTP_METHOD_GET,self::$paths['people']['contentType'].$this->contentType);	
 		}
 		
 		
@@ -565,7 +720,7 @@
 		 * @return mixed
 		 */
 		public function getHouseholdsByName($name){
-			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".{$this->contentType}";
+			$url = $this->settings->baseUrl . self::$paths['people']['householdSearch'] . ".{$this->contentType}";
 			$url .= "?searchFor=" . urlencode($name);
 			return $this->fetch($url);	
 		}
@@ -576,7 +731,7 @@
 		 * @return mixed
 		 */
 		public function searchHouseholds($attributes){
-			$url = $this->settings->baseUrl . $this->paths['people']['householdSearch'] . ".{$this->contentType}";
+			$url = $this->settings->baseUrl . self::$paths['people']['householdSearch'] . ".{$this->contentType}";
 			$url .= "?" . http_build_query($attributes);
 			return $this->fetch($url,null,OAUTH_HTTP_METHOD_GET);
 		}
@@ -763,6 +918,16 @@
 		public function getGivingFundTypes(){
 			return $this->getModel('giving','fundTypes');
 		}
+
+		/**
+		 * fetch giving sub-funds
+		 * @param int $fundId
+		 * @return $mixed
+		 */
+		public function getGivingSubFunds($fundId){
+			return $this->getModel('giving','subFunds',array('fundID'=>$fundId));
+		}
+		
 		
 		/**
 		 * fetch giving contribution types
@@ -787,6 +952,7 @@
 		 * @return array|boolean
 		 */
 		public function getPersonByCredentials($username,$password){
+			
 			$token = $this->obtainCredentialsBasedAccessToken($username,$password,true);
 			if(!$token) return false;
 			$url = $token->headers['Content-Location'].".{$this->contentType}";
@@ -852,7 +1018,7 @@
 		 */
 		protected function getAccessTokenFileName($username){
 			$hash = md5($username);
-			return "{$this->paths['tokenCache']}.f1_{$hash}.accesstoken";
+			return self::$paths['tokenCache'] . ".f1_{$hash}.accesstoken";
 		}
 		
 		/**
@@ -962,12 +1128,10 @@
 			$token = $this->getAccessToken($username,$cacheType,$custoHandlers);
 			
 			$this->debug($token);
-			
 			if(!$token){
 				$token = $this->obtainCredentialsBasedAccessToken($username,$password);
 				$this->saveAccessToken($username,$token,$cacheType,$custoHandlers);
 			}
-			
 			$this->accessToken = $token;
 			
 			return true;
@@ -1000,14 +1164,17 @@
 		 * obtain credentials based access token from API
 		 * @param string $username
 		 * @param string $password
+		 * @param boolean $returnHeaders=false
 		 * @return array
 		 */
-		protected function obtainCredentialsBasedAccessToken($username,$password){
+		protected function obtainCredentialsBasedAccessToken($username,$password,$returnHeaders=false){
 			try{
 				$message = urlencode(base64_encode("{$username} {$password}"));
-				$url = "{$this->settings->baseUrl}{$this->paths['portalUser']['accessToken']}?ec={$message}";
+				$url = $this->settings->baseUrl . self::$paths['portalUser']['accessToken'] . "?ec={$message}";
 				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
-				return (object) $o->getAccessToken($url);
+				$token = $o->getAccessToken($url);
+				if($returnHeaders) $token['headers'] = self::http_parse_headers($o->getLastResponseHeaders());				
+				return (object) $token;				
 			}catch(OAuthException $e){
 				$this->error = array(
 					'error'=>true,
@@ -1030,7 +1197,7 @@
 		protected function obtainRequestToken(){
 			try{
 				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
-				$url = "{$this->settings->baseUrl}{$this->paths['general']['requestToken']}";
+				$url = $this->settings->baseUrl . self::$paths['general']['requestToken'];
 				return (object) $o->getAccessToken($url);
 			}catch(OAuthException $e){
 				$this->error = array(
@@ -1054,7 +1221,7 @@
 				$_SESSION['F1RequestToken'] = $token;
 				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
 				$o->setToken($token->oauth_token, $this->oauth_token_secret);
-				$url = "{$this->settings->baseUrl}{$this->paths['portalUser']['userAuthorization']}?oauth_token={$token->oauth_token}&oauth_callback={$callbackUrl}";
+				$url = $this->settings->baseUrl . self::$paths['portalUser']['userAuthorization'] . "?oauth_token={$token->oauth_token}&oauth_callback={$callbackUrl}";
 				@header("Location:{$url}");
 				die("<script>window.location='{$url}'</script><meta http-equiv='refresh' content='0;URL=\"{$url}\"'>");//backup redirect
 			}catch(OAuthException $e){
@@ -1081,7 +1248,7 @@
 			}
 			
 			try{
-				$url = "{$this->settings->baseUrl}{$this->paths['general']['accessToken']}";
+				$url = $this->settings->baseUrl . self::$paths['general']['accessToken'];
 				$o = new OAuth($this->settings->key, $this->settings->secret, OAUTH_SIG_METHOD_HMACSHA1);
 				$o->setToken($requestToken->oauth_token, $requestToken->oauth_token_secret);
 				return (object) $o->getAccessToken($url);

@@ -5,9 +5,10 @@
 	 * FellowshipOne Helper Class Examples.
 	 */
 
-	//ini_set('display_errors','1');
+	ini_set('display_errors','1');
 
 	session_start();
+	
 	
 	/*
 	session_destroy();
@@ -15,11 +16,11 @@
 	die('clear session for debug');
 	*/
 
-	
-	require('../src/FellowshipOne.php');
+	require('lib/com.rapiddigitalllc/FellowshipOne.php');
 	
 	
 	//find key in F1 Portal under admin > integration > application keys
+	
 	$settings = array(
 		'key'=>'you api key',
 		'secret'=>'you api secret',
@@ -27,17 +28,18 @@
 		'debug'=>false,
 	);
 	
+	
 	echo "<pre>";//view formatted debug output
 	
 	$f1 = new FellowshipOne($settings);
 	
 	//Login Examples -- uncomment one at a time to test
-	//require('1stpartylogin.php');
-	require('2ndpartylogin.php');
-	//require('3rdpartylogin.php');
+	//require('examples/1stpartylogin.php');
+	require('examples/2ndpartylogin.php');
+	//require('examples/3rdpartylogin.php');
 
 	//Resource Examples -- uncomment to test
-	require('resources.php');
+	//require('examples/resources.php');
 	
 
 	
