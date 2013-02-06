@@ -3,7 +3,7 @@
 	/**
 	 * F1 Helper Node for the FellowshipOne Helper Class
 	 * @class F1Node
-	 * @license apache license 2.0, code is distributed "as is", use at own risk, all rights reserved
+	 * @license Non-Commercial Creative Commons, http://creativecommons.org/licenses/by-nc/2.0/, code is distributed "as is", use at own risk, all rights reserved
 	 * @copyright 2013 Daniel Boorn
 	 * @author Daniel Boorn daniel.boorn@gmail.com
 	 * @requires PHP PECL OAuth, http://php.net/oauth
